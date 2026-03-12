@@ -1,0 +1,158 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary:   #080c14;
+  --bg-secondary: #0d1425;
+  --bg-card:      rgba(13, 20, 37, 0.7);
+  --border:       rgba(99, 179, 237, 0.12);
+  --accent:       #38bdf8;
+  --accent-glow:  rgba(56, 189, 248, 0.25);
+  --text-primary: #e2e8f0;
+  --text-muted:   #64748b;
+  --red:          #f87171;
+  --green:        #4ade80;
+  --yellow:       #fbbf24;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Noise overlay ──────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Grid background ────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Glassmorphism card ─────────────────────────── */
+.glass {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+/* ── Glow effects ───────────────────────────────── */
+.glow-accent {
+  box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(56,189,248,0.08);
+}
+.glow-red   { box-shadow: 0 0 20px rgba(248,113,113,0.3); }
+.glow-green { box-shadow: 0 0 20px rgba(74,222,128,0.3); }
+
+/* ── Gradient text ──────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Pulse dot ──────────────────────────────────── */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 currentColor; }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ── Stream frame ───────────────────────────────── */
+.stream-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+}
+.stream-frame::before,
+.stream-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  z-index: 10;
+}
+.stream-frame::before {
+  background: linear-gradient(to bottom,
+    rgba(0,0,0,0.25) 0%,
+    transparent 20%,
+    transparent 80%,
+    rgba(0,0,0,0.5) 100%);
+}
+/* Scanline effect */
+.stream-frame::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+}
+
+/* ── Shimmer skeleton ───────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.03) 0%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Corner decorators ──────────────────────────── */
+.corner-tl, .corner-tr, .corner-bl, .corner-br {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: var(--accent);
+  border-style: solid;
+  opacity: 0.6;
+}
+.corner-tl { top: 8px;  left: 8px;  border-width: 2px 0 0 2px; }
+.corner-tr { top: 8px;  right: 8px; border-width: 2px 2px 0 0; }
+.corner-bl { bottom: 8px; left: 8px;  border-width: 0 0 2px 2px; }
+.corner-br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+/* ── Fade in ────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.5s ease forwards; }
