@@ -1,0 +1,16 @@
+[Unit]
+Description=Nurture Baby Monitor — Sensor Simulation Server
+After=network.target
+
+[Service]
+# ── Starts in DORMANT mode by default ──────────────────────────────────────
+# To start in active mode add:  --start-active
+# To use a different camera:    --camera-index 1
+ExecStart=/usr/bin/python3 /home/pi/nurture/sensor_server.py --port 5000 --camera-index 0
+WorkingDirectory=/home/pi/nurture
+Restart=always
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target

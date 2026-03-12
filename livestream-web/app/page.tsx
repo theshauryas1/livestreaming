@@ -1,4 +1,5 @@
 import StreamPlayer from './components/StreamPlayer';
+import SensorDashboard from './components/SensorDashboard';
 import { Radio, Github, ExternalLink, Cpu, Wifi } from 'lucide-react';
 
 const STREAM_URL = process.env.NEXT_PUBLIC_STREAM_URL ?? '';
@@ -94,6 +95,9 @@ export default function Home() {
             </div>
           ))}
         </section>
+
+        {/* ══ SENSOR DASHBOARD ════════════════════════════════════════════ */}
+        <SensorDashboard />
 
         {/* ══ SETUP CALLOUT ════════════════════════════════════════════════ */}
         {!STREAM_URL && (
