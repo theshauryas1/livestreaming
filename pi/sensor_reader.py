@@ -71,8 +71,8 @@ try:
     if I2C_OK:
         _select_channel(2)
         _ads   = ADS.ADS1115(_i2c)
-        _mq135 = AnalogIn(_ads, ADS.P0)
-        _mic   = AnalogIn(_ads, ADS.P1)
+        _mq135 = AnalogIn(_ads, 0)   # MQ135  on A0
+        _mic   = AnalogIn(_ads, 1)   # MAX9814 on A1
         ADS_OK = True
         print("[sensor] ✓ ADS1115 (ch2) — MQ135 A0, MAX9814 A1")
     else:
