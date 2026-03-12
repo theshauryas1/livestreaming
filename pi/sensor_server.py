@@ -1,27 +1,24 @@
 #!/usr/bin/env python3
 """
-Nurture Baby Monitor — Sensor Simulation Server
-================================================
-Simulates all 8 sensors on Raspberry Pi 5 and serves data via REST API.
-The /api/image endpoint captures a REAL FRAME from the USB camera (same
-workflow as stream_server.py). If the camera is unavailable, falls back
-to a grey placeholder.
+Nurture Baby Monitor — Sensor Server
+======================================
+When run on Raspberry Pi 5 with real sensors:
+  → Imports sensor_reader.py to get live hardware readings
+
+When run without sensors (simulation / development):
+  → Generates realistic random values within safe thresholds
 
 Endpoints:
-  GET  /api/status   → current sensor readings (JSON)
-  GET  /api/image    → live JPEG snapshot from USB camera (or placeholder)
-  POST /api/activate → { "active": true/false }  toggle simulation on/off
-  GET  /api/info     → server state info
+  GET  /api/status   → sensor data (JSON)
+  GET  /api/image    → JPEG snapshot from USB camera
+  POST /api/activate → {"active": true/false} toggle
+  GET  /api/info     → server info
 
-Modes:
-  DORMANT  (default) — all sensors return zero / inactive values
-  ACTIVE             — generates realistic random values within safe thresholds
+Usage on Raspberry Pi 5:
+  python3 sensor_server.py --port 5000 --camera-index 0
 
-Usage:
-  python3 sensor_server.py [--port 5000] [--camera-index 0] [--start-active]
-
-Requirements on Pi:
-  pip3 install opencv-python   (for camera capture)
+Usage for simulation only:
+  python3 sensor_server.py --port 5000 --simulate
 """
 
 import argparse
@@ -31,7 +28,18 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# Try to import OpenCV for real camera frames
+# ── Try importing real sensor reader (only works on Pi with sensors attached) ─
+try:
+    import sensor_reader
+    REAL_SENSORS = True
+    print("[boot] ✓ Real sensors loaded via sensor_reader.py")
+except ImportError:
+    REAL_SENSORS = False
+    print("[boot] ⚠ sensor_reader.py not found — using simulation mode")
+except Exception as e:
+    REAL_SENSORS = False
+    print(f"[boot] ⚠ sensor_reader.py error ({e}) — falling back to simulation")
+
 try:
     import cv2
     CV2_AVAILABLE = True
@@ -153,16 +161,40 @@ def _generate_reading():
 
 
 def _sensor_loop():
-    """Background thread: updates _last_data every 2 seconds when active."""
+    """Background thread: reads real sensors (or simulates) every 2 seconds when active."""
     global _last_data
     while True:
         with _state_lock:
             is_active = _active
         if is_active:
-            data = _generate_reading()
+            if REAL_SENSORS:
+                # ── Real hardware readings ───────────────────────────────
+                try:
+                    data = sensor_reader.read_all()
+                except Exception as e:
+                    print(f"[sensor] read_all() error: {e}")
+                    data = _dormant_data()
+                    data["active"] = True
+            else:
+                # ── Simulation fallback ──────────────────────────────────
+                data = _generate_reading()
+
             with _state_lock:
                 _last_data = data
+
+            # ── Auto-buzzer on real Pi: beep on alerts ───────────────
+            if REAL_SENSORS:
+                try:
+                    if (data.get("cry_detected") or
+                        data.get("body_temp", 0) > ALERT_THRESHOLDS["body_temp"] or
+                        data.get("co2_ppm", 0) > ALERT_THRESHOLDS["co2_ppm"] or
+                        data.get("gas_index", 0) >= ALERT_THRESHOLDS["gas_index"]):
+                        sensor_reader.buzz(300)
+                except Exception:
+                    pass
+
         time.sleep(2)
+
 
 
 # ─── HTTP handler ─────────────────────────────────────────────────────────────
