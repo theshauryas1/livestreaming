@@ -1,0 +1,9 @@
+tunnel: nurture-pi
+credentials-file: /home/pi/.cloudflared/nurture-pi.json
+
+ingress:
+  - hostname: sensor.YOURDOMAIN.com
+    service: http://localhost:5000
+  - hostname: stream.YOURDOMAIN.com
+    service: http://localhost:8080
+  - service: http_status:404
