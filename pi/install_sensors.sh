@@ -107,7 +107,7 @@ After=network.target nurture-sensor.service
 StartLimitIntervalSec=0
 
 [Service]
-ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:5000 --loglevel info
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:5000 --loglevel info
 Restart=always
 RestartSec=10
 User=$ACTUAL_USER
@@ -127,7 +127,7 @@ After=network.target nurture-stream.service
 StartLimitIntervalSec=0
 
 [Service]
-ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:8080 --loglevel info
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:8080 --loglevel info
 Restart=always
 RestartSec=10
 User=$ACTUAL_USER
