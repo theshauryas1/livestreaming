@@ -52,7 +52,7 @@ Description=Ngrok Tunnel - Nurture Camera Stream
 After=network.target nurture-stream.service
 
 [Service]
-ExecStart=/usr/bin/ngrok http 8080 --log=stdout
+ExecStart=/usr/local/bin/ngrok http 8080 --log=stdout
 Restart=always
 RestartSec=10
 User=$ACTUAL_USER
