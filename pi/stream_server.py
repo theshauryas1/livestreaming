@@ -112,20 +112,23 @@ def start_usb_libcamera(camera_index: int = 1):
     No OpenCV or picamera2 encoder needed — reads raw MJPEG bytes from stdout.
     camera_index: 0 = Pi Camera Module, 1 = first USB camera (libcamera ordering)
     """
-    import subprocess, threading
+    import subprocess, threading, shutil
 
     log.info(f"Starting USB camera via libcamera-vid (camera index {camera_index}) …")
 
+    # Bookworm uses rpicam-vid; Bullseye uses libcamera-vid
+    cmd_name = "rpicam-vid" if shutil.which("rpicam-vid") else "libcamera-vid"
+
     cmd = [
-        "libcamera-vid",
+        cmd_name,
         "--camera", str(camera_index),
-        "-t", "0",               # stream forever
+        "-t", "0",
         "--width",  str(WIDTH),
         "--height", str(HEIGHT),
         "--framerate", str(FRAMERATE),
-        "--codec", "mjpeg",      # native MJPEG output
-        "--inline",              # embed SPS/PPS in every frame
-        "-o", "-",               # pipe to stdout
+        "--codec", "mjpeg",
+        "--inline",
+        "-o", "-",
         "--nopreview",
     ]
 
