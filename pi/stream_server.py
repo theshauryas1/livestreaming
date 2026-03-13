@@ -61,6 +61,7 @@ class StreamingHandler(BaseHTTPRequestHandler):
         if path_only == "/":
             self.send_response(301)
             self.send_header("Location", STREAM_PATH)
+            self._cors_headers()
             self.end_headers()
 
         elif path_only == "/health":
