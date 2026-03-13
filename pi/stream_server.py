@@ -106,44 +106,54 @@ class StreamingServer(HTTPServer):
 
 # ─── Camera backends ───────────────────────────────────────────────────────────
 
-def start_picamera2(pi5_mode: bool = False):
-    """Start streaming using picamera2 (Camera Module 3 or Pi 5 Camera)."""
+def start_picamera2(pi5_mode: bool = False, uvc_mode: bool = False):
+    """Start streaming using picamera2.
+    uvc_mode=True → USB webcam via libcamera/uvcvideo (no AF, no FrameDurationLimits)
+    """
     from picamera2 import Picamera2
     from picamera2.encoders import MJPEGEncoder
     from picamera2.outputs import FileOutput
 
-    label = "Pi 5 Camera" if pi5_mode else "Camera Module 3"
+    if uvc_mode:
+        label = "USB Camera (UVC via libcamera)"
+    elif pi5_mode:
+        label = "Pi 5 Camera"
+    else:
+        label = "Camera Module 3"
+
     log.info(f"Initialising {label} via picamera2 …")
 
     picam2 = Picamera2()
 
-    controls = {
-        "FrameRate": FRAMERATE,
+    if uvc_mode:
+        # USB UVC cameras don't advertise FrameDurationLimits or AfMode
+        # Use minimal config with no controls
+        video_config = picam2.create_video_configuration(
+            main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
+            controls={},
+        )
+    else:
+        controls = {"FrameRate": FRAMERATE}
+        if pi5_mode or not pi5_mode:  # both pi and pi5 support AF
+            controls.update({"AfMode": 2, "AfSpeed": 1})
+
+        video_config = picam2.create_video_configuration(
+            main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
+            controls=controls,
+        )
+
+    # Strip any controls the camera doesn't support
+    supported = set(picam2.camera_controls.keys())
+    video_config["controls"] = {
+        k: v for k, v in video_config.get("controls", {}).items()
+        if k in supported
     }
 
-    if pi5_mode:
-        # Pi 5 Camera: enable autofocus (supported on newer modules)
-        controls.update({
-            "AfMode": 2,   # 2 = continuous autofocus
-            "AfSpeed": 1,  # 1 = fast AF
-        })
-    else:
-        # Camera Module 3 — also supports continuous AF
-        controls.update({
-            "AfMode": 2,
-            "AfSpeed": 1,
-        })
-
-    video_config = picam2.create_video_configuration(
-        main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
-        controls=controls,
-    )
     picam2.configure(video_config)
-
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
     log.info(f"{label} started — {WIDTH}x{HEIGHT} @ {FRAMERATE} fps")
-
     return picam2
+
 
 
 def start_usb_camera(device_index: int = 0):
@@ -238,7 +248,8 @@ def main():
     camera_resource = None
 
     if args.camera == "usb":
-        camera_resource = start_usb_camera(device_index=args.usb_index)
+        # USB webcam detected via libcamera uvcvideo — use picamera2 with no extra controls
+        camera_resource = start_picamera2(uvc_mode=True)
     elif args.camera == "pi5":
         camera_resource = start_picamera2(pi5_mode=True)
     else:
