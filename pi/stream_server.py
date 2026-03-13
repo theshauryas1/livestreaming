@@ -55,12 +55,15 @@ class StreamingHandler(BaseHTTPRequestHandler):
             log.info(f"{self.client_address[0]} - {format % args}")
 
     def do_GET(self):
-        if self.path == "/":
+        # Strip query parameters for routing
+        path_only = self.path.split("?", 1)[0]
+
+        if path_only == "/":
             self.send_response(301)
             self.send_header("Location", STREAM_PATH)
             self.end_headers()
 
-        elif self.path == "/health":
+        elif path_only == "/health":
             payload = b'{"status":"ok"}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -69,7 +72,7 @@ class StreamingHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
 
-        elif self.path == STREAM_PATH:
+        elif path_only == STREAM_PATH:
             self.send_response(200)
             self.send_header("Age", "0")
             self.send_header("Cache-Control", "no-cache, private")
