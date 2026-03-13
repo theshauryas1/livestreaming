@@ -106,57 +106,84 @@ class StreamingServer(HTTPServer):
 
 # ─── Camera backends ───────────────────────────────────────────────────────────
 
-def start_picamera2(pi5_mode: bool = False, uvc_mode: bool = False):
-    """Start streaming using picamera2.
-    uvc_mode=True → USB webcam via libcamera/uvcvideo (no AF, no FrameDurationLimits)
+def start_usb_libcamera(camera_index: int = 1):
     """
+    Stream USB webcam using libcamera-vid subprocess (MJPEG passthrough).
+    No OpenCV or picamera2 encoder needed — reads raw MJPEG bytes from stdout.
+    camera_index: 0 = Pi Camera Module, 1 = first USB camera (libcamera ordering)
+    """
+    import subprocess, threading
+
+    log.info(f"Starting USB camera via libcamera-vid (camera index {camera_index}) …")
+
+    cmd = [
+        "libcamera-vid",
+        "--camera", str(camera_index),
+        "-t", "0",               # stream forever
+        "--width",  str(WIDTH),
+        "--height", str(HEIGHT),
+        "--framerate", str(FRAMERATE),
+        "--codec", "mjpeg",      # native MJPEG output
+        "--inline",              # embed SPS/PPS in every frame
+        "-o", "-",               # pipe to stdout
+        "--nopreview",
+    ]
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    log.info(f"USB Camera stream started — {WIDTH}x{HEIGHT} @ {FRAMERATE} fps")
+
+    def _pipe_frames():
+        buf = b""
+        SOI = b"\xff\xd8"   # JPEG start marker
+        EOI = b"\xff\xd9"   # JPEG end marker
+        while True:
+            chunk = proc.stdout.read(65536)
+            if not chunk:
+                break
+            buf += chunk
+            while True:
+                start = buf.find(SOI)
+                end   = buf.find(EOI, start + 2) if start != -1 else -1
+                if start == -1 or end == -1:
+                    break
+                jpeg = buf[start : end + 2]
+                output.write(jpeg)
+                buf = buf[end + 2:]
+
+    t = threading.Thread(target=_pipe_frames, daemon=True)
+    t.start()
+    return proc
+
+
+def start_picamera2(pi5_mode: bool = False):
+    """Start streaming using picamera2 (Pi Camera Module 2/3)."""
     from picamera2 import Picamera2
     from picamera2.encoders import MJPEGEncoder
     from picamera2.outputs import FileOutput
 
-    if uvc_mode:
-        label = "USB Camera (UVC via libcamera)"
-    elif pi5_mode:
-        label = "Pi 5 Camera"
-    else:
-        label = "Camera Module 3"
-
+    label = "Pi 5 Camera" if pi5_mode else "Camera Module 3"
     log.info(f"Initialising {label} via picamera2 …")
 
     picam2 = Picamera2()
+    controls = {"FrameRate": FRAMERATE}
+    controls.update({"AfMode": 2, "AfSpeed": 1})
 
-    if uvc_mode:
-        # USB UVC cameras don't advertise FrameDurationLimits or AfMode
-        # Use minimal config with no controls
-        video_config = picam2.create_video_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
-            controls={},
-        )
-    else:
-        controls = {"FrameRate": FRAMERATE}
-        if pi5_mode or not pi5_mode:  # both pi and pi5 support AF
-            controls.update({"AfMode": 2, "AfSpeed": 1})
-
-        video_config = picam2.create_video_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
-            controls=controls,
-        )
-
-    # Strip any controls the camera doesn't support
+    video_config = picam2.create_video_configuration(
+        main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
+        controls=controls,
+    )
+    # Strip unsupported controls
     supported = set(picam2.camera_controls.keys())
     video_config["controls"] = {
         k: v for k, v in video_config.get("controls", {}).items()
         if k in supported
     }
-
     picam2.configure(video_config)
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
     log.info(f"{label} started — {WIDTH}x{HEIGHT} @ {FRAMERATE} fps")
     return picam2
 
 
-
-def start_usb_camera(device_index: int = 0):
     """Start streaming from a USB webcam using OpenCV in a background thread."""
     try:
         import cv2
@@ -248,8 +275,8 @@ def main():
     camera_resource = None
 
     if args.camera == "usb":
-        # USB webcam detected via libcamera uvcvideo — use picamera2 with no extra controls
-        camera_resource = start_picamera2(uvc_mode=True)
+        # USB UVC webcam — libcamera-vid native MJPEG passthrough (no OpenCV needed)
+        camera_resource = start_usb_libcamera(camera_index=args.usb_index + 1)
     elif args.camera == "pi5":
         camera_resource = start_picamera2(pi5_mode=True)
     else:
@@ -265,17 +292,16 @@ def main():
     except KeyboardInterrupt:
         log.info("Shutting down …")
     finally:
-        if args.camera in ("pi", "pi5"):
-            try:
+        try:
+            if hasattr(camera_resource, "stop_recording"):
                 camera_resource.stop_recording()
                 camera_resource.close()
-            except Exception:
-                pass
-        else:
-            try:
+            elif hasattr(camera_resource, "terminate"):
+                camera_resource.terminate()
+            elif hasattr(camera_resource, "release"):
                 camera_resource.release()
-            except Exception:
-                pass
+        except Exception:
+            pass
         log.info("Camera closed.")
 
 

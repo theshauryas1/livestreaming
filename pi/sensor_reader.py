@@ -38,24 +38,40 @@ except Exception as e:
 
 MUX_ADDR = 0x70
 
-def _select_channel(ch: int):
-    """Select TCA9548A channel 0-7."""
+def _mux_reset():
+    """Disable ALL mux channels (write 0x00). Clears stuck bus state."""
     if not BUS_OK:
         return
     try:
+        _bus.write_byte(MUX_ADDR, 0x00)
+        time.sleep(0.1)
+    except Exception:
+        pass
+
+def _select_channel(ch: int) -> bool:
+    """Select TCA9548A channel 0-7. Returns False on failure."""
+    if not BUS_OK:
+        return False
+    try:
         _bus.write_byte(MUX_ADDR, 1 << ch)
-        time.sleep(0.05)
+        time.sleep(0.1)   # longer delay = more reliable
+        return True
     except Exception as e:
         print(f"[mux] ch{ch} error: {e}")
+        _mux_reset()      # reset bus on any mux failure
+        return False
+
+# Reset mux at startup to clear any leftover channel state from previous run
+_mux_reset()
 
 # ─── BME680 on Mux Channel 1, address 0x77 ───────────────────────────────────
 try:
     import adafruit_bme680
-    if I2C_OK:
-        _select_channel(1)
+    if I2C_OK and _select_channel(1):
         _bme = adafruit_bme680.Adafruit_BME680_I2C(_i2c, address=0x77)
         _bme.sea_level_pressure = 1013.25
         _bme.filter_size = 3
+        _mux_reset()
         BME_OK = True
         print("[sensor] ✓ BME680 (ch1, 0x77)")
     else:
@@ -68,11 +84,11 @@ except Exception as e:
 try:
     import adafruit_ads1x15.ads1115 as ADS
     from adafruit_ads1x15.analog_in import AnalogIn
-    if I2C_OK:
-        _select_channel(2)
+    if I2C_OK and _select_channel(2):
         _ads   = ADS.ADS1115(_i2c)
         _mq135 = AnalogIn(_ads, 0)   # MQ135  on A0
         _mic   = AnalogIn(_ads, 1)   # MAX9814 on A1
+        _mux_reset()
         ADS_OK = True
         print("[sensor] ✓ ADS1115 (ch2) — MQ135 A0, MAX9814 A1")
     else:
@@ -84,9 +100,9 @@ except Exception as e:
 # ─── MLX90614 on Mux Channel 3, address 0x5A (optional) ─────────────────────
 try:
     import adafruit_mlx90614
-    if I2C_OK:
-        _select_channel(3)
+    if I2C_OK and _select_channel(3):
         _mlx   = adafruit_mlx90614.MLX90614(_i2c)
+        _mux_reset()
         MLX_OK = True
         print("[sensor] ✓ MLX90614 (ch3, 0x5A)")
     else:
@@ -166,25 +182,29 @@ def read_all() -> dict:
     # BME680 (ch1) ─────────────────────────────────────────────────────────────
     if BME_OK:
         try:
-            _select_channel(1)
-            data["room_temp"] = round(_bme.temperature, 2)
-            data["humidity"]  = int(_bme.relative_humidity)
-            data["pressure"]  = round(_bme.pressure, 2)
-            gas_r = _bme.gas  # Ohms — high = clean, low = poor air
-            data["gas_index"] = int(max(0, 300000 - gas_r)) if gas_r else 0
+            if _select_channel(1):
+                data["room_temp"] = round(_bme.temperature, 2)
+                data["humidity"]  = int(_bme.relative_humidity)
+                data["pressure"]  = round(_bme.pressure, 2)
+                gas_r = _bme.gas
+                data["gas_index"] = int(max(0, 300000 - gas_r)) if gas_r else 0
+                _mux_reset()
         except Exception as e:
             print(f"[sensor] BME680 read error: {e}")
+            _mux_reset()
 
     # ADS1115 (ch2) — MQ135 + MAX9814 ─────────────────────────────────────────
     if ADS_OK:
         try:
-            _select_channel(2)
-            mq_raw = abs(_mq135.value)
-            data["mq135_raw"] = mq_raw
-            mq_index = int((mq_raw / 32767) * 300000)
-            data["gas_index"] = max(data["gas_index"], mq_index)
+            if _select_channel(2):
+                mq_raw = abs(_mq135.value)
+                data["mq135_raw"] = mq_raw
+                mq_index = int((mq_raw / 32767) * 300000)
+                data["gas_index"] = max(data["gas_index"], mq_index)
+                _mux_reset()
         except Exception as e:
             print(f"[sensor] MQ135 read error: {e}")
+            _mux_reset()
         try:
             data["cry_detected"] = _detect_cry()
         except Exception as e:
@@ -193,11 +213,13 @@ def read_all() -> dict:
     # MLX90614 (ch3) — optional ────────────────────────────────────────────────
     if MLX_OK:
         try:
-            _select_channel(3)
-            data["body_temp"]    = round(_mlx.object_temperature, 2)
-            data["ambient_temp"] = round(_mlx.ambient_temperature, 2)
+            if _select_channel(3):
+                data["body_temp"]    = round(_mlx.object_temperature, 2)
+                data["ambient_temp"] = round(_mlx.ambient_temperature, 2)
+                _mux_reset()
         except Exception as e:
             print(f"[sensor] MLX90614 read error: {e}")
+            _mux_reset()
 
     # MH-Z19B — UART, no mux ───────────────────────────────────────────────────
     if MHZ_OK:
